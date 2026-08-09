@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -23,9 +23,14 @@ test("serves machine configuration with live storage and model data", async (con
   const directory = await mkdtemp(join(tmpdir(), "cheesegrater-lab-test-"));
   const languageRoot = join(directory, "language");
   const imageRoot = join(directory, "images");
-  await mkdir(languageRoot);
+  const cachedModel = join(languageRoot, "models--publisher--example-GGUF", "snapshots", "revision");
+  const blobDirectory = join(languageRoot, "models--publisher--example-GGUF", "blobs");
+  await mkdir(cachedModel, { recursive: true });
+  await mkdir(blobDirectory, { recursive: true });
   await mkdir(imageRoot);
-  await writeFile(join(languageRoot, "test.gguf"), "model");
+  await writeFile(join(blobDirectory, "model-hash"), "model");
+  await symlink("../../blobs/model-hash", join(cachedModel, "example-Q4_K_M.gguf"));
+  await symlink("../../blobs/model-hash", join(cachedModel, "mmproj-example-bf16.gguf"));
   await writeFile(join(imageRoot, "test.safetensors"), "model");
 
   const configPath = join(directory, "config.json");
@@ -66,4 +71,6 @@ test("serves machine configuration with live storage and model data", async (con
   assert.equal(payload.models.total, 2);
   assert.equal(payload.models.language, 1);
   assert.equal(payload.models.image, 1);
+  assert.equal(payload.models.items.length, 2);
+  assert.equal(payload.models.items[0].reference, "publisher/example-GGUF:Q4_K_M");
 });

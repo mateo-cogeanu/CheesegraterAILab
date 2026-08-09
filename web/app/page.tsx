@@ -5,12 +5,22 @@ import { useCallback, useEffect, useState } from "react";
 type View = "overview" | "models" | "chat" | "images";
 type ConnectionState = "checking" | "connected" | "unconfigured" | "error";
 
+type ModelRecord = {
+  id: string;
+  name: string;
+  filename: string;
+  type: "language" | "image";
+  size?: string;
+  reference: string;
+  source?: string;
+};
+
 type SystemSnapshot = {
   machine?: { name?: string };
   accelerator?: { name?: string; memory?: string };
   backend?: { name?: string; version?: string };
   storage?: { path?: string; used?: string; available?: string; total?: string; usedPercent?: number };
-  models?: { total?: number; language?: number; image?: number };
+  models?: { total?: number; language?: number; image?: number; items?: ModelRecord[] };
 };
 
 type LabSettings = { apiUrl: string };
@@ -70,9 +80,17 @@ function Overview({ goTo, state, system, openSettings }: { goTo: (view: View) =>
 
 function Models({ system }: { system: SystemSnapshot | null }) {
   const [repo, setRepo] = useState("");
+  const [filter, setFilter] = useState<"all" | "language" | "image">("all");
+  const [copied, setCopied] = useState<string | null>(null);
   const storage = system?.storage;
   const percent = typeof storage?.usedPercent === "number" ? Math.min(100, Math.max(0, storage.usedPercent)) : null;
-  return <><section className="workspace-grid"><article className="panel download-panel"><span className="card-kicker">Model source</span><h2>Add a model to the lab</h2><p>Enter a provider reference or URL. The connected backend will determine supported sources, files, and destination.</p><label className="field-label" htmlFor="model-repo">Repository, reference, or URL</label><div className="input-row"><input id="model-repo" value={repo} onChange={(event) => setRepo(event.target.value)} placeholder="provider/model or https://…" /><button className="button button-primary" disabled>Review</button></div><p className="field-note">Downloads will be enabled when a model-management API is connected.</p></article><article className="panel storage-mini"><span className="card-kicker">Storage</span><h3>{storage?.path || "Not configured"}</h3><div className={`capacity ${percent === null ? "unknown" : ""}`}><span style={percent === null ? undefined : { width: `${percent}%` }} /></div><div className="capacity-labels"><span>{storage?.used || "Usage unknown"}</span><strong>{storage?.available || "Availability unknown"}</strong></div></article></section><section className="panel library-panel"><div className="section-heading compact"><div><span className="card-kicker">Installed models</span><h2>Your model library</h2></div><div className="segmented"><button className="active">All</button><button>Language</button><button>Images</button></div></div><div className="library-empty"><span className="large-glyph">◫</span><h3>No model data yet.</h3><p>The library will populate from configured providers. Nothing is assumed from the browser or deployment host.</p></div></section></>;
+  const models = (system?.models?.items || []).filter((model) => filter === "all" || model.type === filter);
+  async function copyReference(model: ModelRecord) {
+    await navigator.clipboard.writeText(model.reference);
+    setCopied(model.id);
+    window.setTimeout(() => setCopied((current) => current === model.id ? null : current), 1600);
+  }
+  return <><section className="workspace-grid"><article className="panel download-panel"><span className="card-kicker">Model source</span><h2>Add a model to the lab</h2><p>Enter a provider reference or URL. The connected backend will determine supported sources, files, and destination.</p><label className="field-label" htmlFor="model-repo">Repository, reference, or URL</label><div className="input-row"><input id="model-repo" value={repo} onChange={(event) => setRepo(event.target.value)} placeholder="provider/model or https://…" /><button className="button button-primary" disabled>Review</button></div><p className="field-note">Downloads will be enabled when a model-management API is connected.</p></article><article className="panel storage-mini"><span className="card-kicker">Storage</span><h3>{storage?.path || "Not configured"}</h3><div className={`capacity ${percent === null ? "unknown" : ""}`}><span style={percent === null ? undefined : { width: `${percent}%` }} /></div><div className="capacity-labels"><span>{storage?.used || "Usage unknown"}</span><strong>{storage?.available || "Availability unknown"}</strong></div></article></section><section className="panel library-panel"><div className="section-heading compact"><div><span className="card-kicker">Installed models</span><h2>Your model library</h2></div><div className="segmented" aria-label="Filter models"><button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All</button><button className={filter === "language" ? "active" : ""} onClick={() => setFilter("language")}>Language</button><button className={filter === "image" ? "active" : ""} onClick={() => setFilter("image")}>Images</button></div></div>{models.length ? <div className="model-list">{models.map((model) => <article className="model-row" key={model.id}><span className={`model-glyph ${model.type}`}>{model.type === "language" ? "✦" : "◇"}</span><div className="model-info"><div className="model-title"><strong>{model.name}</strong><span>{model.type === "language" ? "Language" : "Image"}</span></div><code>{model.reference}</code><small>{[model.source, model.size, model.filename].filter(Boolean).join(" · ")}</small></div><button className="copy-model" onClick={() => void copyReference(model)} aria-label={`Copy ${model.reference}`}>{copied === model.id ? "Copied" : "Copy name"}</button></article>)}</div> : <div className="library-empty"><span className="large-glyph">◫</span><h3>{system?.models?.items ? "No models in this category." : "No model data yet."}</h3><p>{system?.models?.items ? "Choose another filter to see the models reported by this lab." : "The library will populate from configured providers. Nothing is assumed from the browser or deployment host."}</p></div>}</section></>;
 }
 
 function Chat() {
