@@ -2,7 +2,7 @@
 
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { createReadStream, mkdirSync, readFileSync, readdirSync, statfsSync, statSync } from "node:fs";
+import { createReadStream, mkdirSync, readFileSync, readdirSync, statfsSync, statSync, unlinkSync } from "node:fs";
 import http from "node:http";
 import { basename, extname, join, resolve } from "node:path";
 
@@ -12,6 +12,21 @@ const uiHost = "127.0.0.1";
 const uiPort = Number(process.env.LAB_UI_PORT || listenPort + 1);
 const configPath = process.env.LAB_CONFIG || "/etc/cheesegrater-ai-lab/config.json";
 const webDirectory = process.env.LAB_WEB_DIR || resolve(import.meta.dirname, "../web");
+
+const quantizationLevels = [
+  { id: "Q8_0", bits: 7.96, label: "Q8_0 · light compression", quality: "Near-original quality" },
+  { id: "Q6_K", bits: 6.14, label: "Q6_K · balanced", quality: "Very high quality" },
+  { id: "Q5_K_M", bits: 5.33, label: "Q5_K_M · medium compression", quality: "High quality" },
+  { id: "Q4_K_M", bits: 4.58, label: "Q4_K_M · stronger compression", quality: "Good general-purpose quality" },
+  { id: "Q3_K_M", bits: 3.74, label: "Q3_K_M · heavy compression", quality: "Significant quality degradation likely", warning: true },
+  { id: "Q2_K", bits: 2.96, label: "Q2_K · maximum compression", quality: "Significant quality degradation likely", warning: true },
+];
+
+function quantizationLevel(filename) {
+  const matches = [...filename.toUpperCase().matchAll(/(?<![A-Z0-9])(Q8_0|Q6_K|Q5_K_M|Q4_K_M|Q3_K_M|Q2_K)(?![A-Z0-9])/g)];
+  const id = matches.at(-1)?.[1];
+  return quantizationLevels.find((level) => level.id === id) || null;
+}
 
 function loadConfig() {
   const config = JSON.parse(readFileSync(configPath, "utf8"));
@@ -81,9 +96,22 @@ function huggingFaceReference(path) {
   return quantization ? `${repository}:${quantization}` : repository;
 }
 
-function modelRecord(file, type) {
+function modelRecord(file, type, config) {
   const filename = basename(file.path);
   const reference = type === "language" ? huggingFaceReference(file.path) : null;
+  const currentLevel = type === "language" ? quantizationLevel(filename) : null;
+  const quantizeExecutable = config.services?.language?.quantizeExecutable;
+  const options = type === "language" && quantizeExecutable
+    ? quantizationLevels.filter((level) => level.bits < (currentLevel?.bits || 16)).map((level) => ({
+      id: level.id,
+      label: level.label,
+      quality: level.quality,
+      estimatedSize: formatBytes(Math.ceil(file.size * level.bits / (currentLevel?.bits || 16))),
+      warning: Boolean(level.warning || currentLevel),
+      warningText: currentLevel
+        ? "Re-quantizing an already compressed model can significantly reduce quality. For best results, quantize from an F16 or F32 source."
+        : level.warning ? "This compression level is likely to cause significant quality degradation." : undefined,
+    })) : [];
   return {
     id: file.path,
     name: reference || filename.replace(/\.[^.]+$/, ""),
@@ -92,6 +120,14 @@ function modelRecord(file, type) {
     size: formatBytes(file.size),
     reference: reference || filename,
     source: reference ? "Hugging Face" : "Local storage",
+    quantization: {
+      supported: Boolean(type === "language" && quantizeExecutable && options.length),
+      currentLevel: currentLevel?.id,
+      options,
+      unavailableReason: type !== "language"
+        ? "This model format is not supported by the installed quantization runtime."
+        : !quantizeExecutable ? "No compatible local quantization runtime was detected." : options.length ? undefined : "No smaller supported quantization level is available.",
+    },
   };
 }
 
@@ -99,9 +135,9 @@ function systemSnapshot() {
   const config = loadConfig();
   const language = [...filesBelow(config.models?.languageRoots || [], new Set([".gguf"])).values()]
     .filter((file) => !basename(file.path).toLowerCase().startsWith("mmproj-"))
-    .map((file) => modelRecord(file, "language"));
+    .map((file) => modelRecord(file, "language", config));
   const images = [...filesBelow(config.models?.imageRoots || [], new Set([".safetensors", ".ckpt", ".gguf", ".pt", ".pth", ".bin"])).values()]
-    .map((file) => modelRecord(file, "image"));
+    .map((file) => modelRecord(file, "image", config));
   const items = [...language, ...images].sort((left, right) => left.name.localeCompare(right.name));
   return {
     machine: config.machine || undefined,
@@ -170,40 +206,15 @@ function runExecutable(executable, args, timeoutMs) {
 
 function cleanGeneratedText(value, prompt) {
   let text = value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/^>\s*/gm, "").trim();
-  if (text.includes("Loading model...")) {
+  const taggedThinkingEnd = text.lastIndexOf("</think>");
+  const thinkingEnd = text.lastIndexOf("[End thinking]");
+  if (taggedThinkingEnd >= 0) text = text.slice(taggedThinkingEnd + "</think>".length);
+  else if (thinkingEnd >= 0) text = text.slice(thinkingEnd + "[End thinking]".length);
+  else if (text.includes("Loading model...")) {
     const promptIndex = text.lastIndexOf(prompt);
     if (promptIndex >= 0) text = text.slice(promptIndex + prompt.length);
   }
   return text.replace(/\[\s*Prompt:[\s\S]*$/i, "").replace(/^Exiting\.\.\.$/gm, "").trim();
-}
-
-function parseChatOutput(value, prompt) {
-  const text = cleanGeneratedText(value, prompt);
-  const bracketed = text.match(/\[Start thinking\]\s*([\s\S]*?)\s*\[End thinking\]/i);
-  if (bracketed) {
-    return {
-      reasoning: bracketed[1].trim(),
-      answer: text.replace(bracketed[0], "").trim(),
-    };
-  }
-
-  const tagged = text.match(/<think>\s*([\s\S]*?)\s*<\/think>/i);
-  if (tagged) {
-    return {
-      reasoning: tagged[1].trim(),
-      answer: text.replace(tagged[0], "").trim(),
-    };
-  }
-
-  const thinkingEnd = text.lastIndexOf("[End thinking]");
-  if (thinkingEnd >= 0) {
-    return {
-      reasoning: text.slice(0, thinkingEnd).replace(/^\[Start thinking\]\s*/i, "").trim(),
-      answer: text.slice(thinkingEnd + "[End thinking]".length).trim(),
-    };
-  }
-
-  return { reasoning: "", answer: text };
 }
 
 function modelById(type, id) {
@@ -212,9 +223,11 @@ function modelById(type, id) {
 
 let languageBusy = false;
 let imageBusy = false;
+let quantizationBusy = false;
 
 async function runChat(request, response) {
-  if (languageBusy) return json(response, 409, { error: "The language model is already working" });
+  if (languageBusy || quantizationBusy) return json(response, 409, { error: "The language runtime is already working" });
+  languageBusy = true;
   try {
     const body = await readJson(request);
     const message = typeof body.message === "string" ? body.message.trim() : "";
@@ -222,27 +235,58 @@ async function runChat(request, response) {
     const executable = loadConfig().services?.language?.executable;
     if (!model || !executable || !message) return json(response, 400, { error: "Choose a model and enter a message" });
     if (message.length > 16_000) return json(response, 400, { error: "Message is too long" });
-    languageBusy = true;
     const result = await runExecutable(executable, [
       "-m", model.id,
       "-p", message,
-      "-n", "1024",
+      "-n", "384",
       "-ngl", "999",
       "--no-display-prompt",
       "--simple-io",
       "--single-turn",
-      "--reasoning", "on",
+      "--reasoning", "off",
     ], 15 * 60_000);
-    const output = parseChatOutput(result.stdout, message);
-    json(response, 200, {
-      answer: output.answer || "The model returned an empty response",
-      ...(output.reasoning ? { reasoning: output.reasoning } : {}),
-    });
+    const answer = cleanGeneratedText(result.stdout, message);
+    json(response, 200, { answer: answer || "The model returned an empty response" });
   } catch (error) {
     console.error(error);
     json(response, 500, { error: "Local language generation failed", detail: error.message });
   } finally {
     languageBusy = false;
+  }
+}
+
+async function quantizeModel(request, response) {
+  if (languageBusy || quantizationBusy) return json(response, 409, { error: "The language runtime is already working" });
+  quantizationBusy = true;
+  let output;
+  try {
+    const body = await readJson(request);
+    const model = modelById("language", body.modelId);
+    const option = model?.quantization?.options?.find((item) => item.id === body.level);
+    const config = loadConfig();
+    const executable = config.services?.language?.quantizeExecutable;
+    const outputRoot = config.models?.languageOutputRoot;
+    if (!model || !option || !executable || !outputRoot) return json(response, 400, { error: "Choose a supported model and quantization level" });
+
+    mkdirSync(outputRoot, { recursive: true });
+    let stem = model.filename.replace(/\.gguf$/i, "");
+    if (model.quantization.currentLevel) stem = stem.replace(new RegExp(`-${model.quantization.currentLevel}$`, "i"), "");
+    const filename = `${stem}-${option.id}-${Date.now()}.gguf`;
+    output = join(outputRoot, filename);
+    const args = [];
+    if (model.quantization.currentLevel) args.push("--allow-requantize");
+    args.push(model.id, output, option.id);
+    await runExecutable(executable, args, 6 * 60 * 60_000);
+    statSync(output);
+    json(response, 201, { filename, message: "Quantized copy saved to local model storage" });
+  } catch (error) {
+    if (output) {
+      try { unlinkSync(output); } catch {}
+    }
+    console.error(error);
+    json(response, 500, { error: "Local model quantization failed", detail: error.message });
+  } finally {
+    quantizationBusy = false;
   }
 }
 
@@ -321,11 +365,12 @@ const server = http.createServer((request, response) => {
     return;
   }
   if (url.pathname === "/api/health") {
-    json(response, 200, { status: "ok", jobs: { languageBusy, imageBusy } });
+    json(response, 200, { status: "ok", jobs: { languageBusy, imageBusy, quantizationBusy } });
     return;
   }
   if (url.pathname === "/api/chat" && request.method === "POST") return void runChat(request, response);
   if (url.pathname === "/api/images" && request.method === "POST") return void runImage(request, response);
+  if (url.pathname === "/api/models/quantize" && request.method === "POST") return void quantizeModel(request, response);
   if (url.pathname.startsWith("/api/outputs/") && request.method === "GET") return void serveOutput(url, response);
 
   const proxy = http.request({

@@ -35,6 +35,9 @@ test("serves machine configuration with live storage and model data", async (con
   const languageExecutable = join(directory, "test-language-runtime");
   await writeFile(languageExecutable, "#!/bin/sh\nprintf '[Start thinking]\\nI should reply locally.\\n[End thinking]\\nhello locally\\n'\n");
   await chmod(languageExecutable, 0o755);
+  const quantizeExecutable = join(directory, "test-quantize-runtime");
+  await writeFile(quantizeExecutable, "#!/bin/sh\nif [ \"$1\" = \"--allow-requantize\" ]; then shift; fi\ncp \"$1\" \"$2\"\n");
+  await chmod(quantizeExecutable, 0o755);
 
   const configPath = join(directory, "config.json");
   await writeFile(configPath, JSON.stringify({
@@ -44,9 +47,9 @@ test("serves machine configuration with live storage and model data", async (con
     accelerator: { name: "Detected accelerator" },
     backend: { name: "Detected backend" },
     storage: { path: directory },
-    models: { languageRoots: [languageRoot], imageRoots: [imageRoot] },
+    models: { languageRoots: [languageRoot], imageRoots: [imageRoot], languageOutputRoot: languageRoot },
     outputs: { images: join(directory, "outputs") },
-    services: { language: { engine: "test", executable: languageExecutable }, image: null },
+    services: { language: { engine: "test", executable: languageExecutable, quantizeExecutable }, image: null },
   }));
 
   const port = 32_000 + Math.floor(Math.random() * 2_000);
@@ -77,6 +80,11 @@ test("serves machine configuration with live storage and model data", async (con
   assert.equal(payload.models.image, 1);
   assert.equal(payload.models.items.length, 2);
   assert.equal(payload.models.items[0].reference, "publisher/example-GGUF:Q4_K_M");
+  assert.equal(payload.models.items[0].quantization.currentLevel, "Q4_K_M");
+  assert.deepEqual(payload.models.items[0].quantization.options.map((option) => option.id), ["Q3_K_M", "Q2_K"]);
+  assert.equal(payload.models.items[0].quantization.options[0].warning, true);
+  assert.match(payload.models.items[0].quantization.options[0].estimatedSize, / B$/);
+  assert.equal(payload.models.items[1].quantization.supported, false);
 
   const chatResponse = await fetch(`http://127.0.0.1:${port}/api/chat`, {
     method: "POST",
@@ -86,5 +94,25 @@ test("serves machine configuration with live storage and model data", async (con
   assert.equal(chatResponse.status, 200);
   const chatPayload = await chatResponse.json();
   assert.equal(chatPayload.answer, "hello locally");
-  assert.equal(chatPayload.reasoning, "I should reply locally.");
+  assert.equal("reasoning" in chatPayload, false);
+
+  const quantizeResponse = await fetch(`http://127.0.0.1:${port}/api/models/quantize`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ modelId: payload.models.items[0].id, level: "Q3_K_M" }),
+  });
+  assert.equal(quantizeResponse.status, 201);
+  const quantizePayload = await quantizeResponse.json();
+  assert.match(quantizePayload.filename, /-Q3_K_M-\d+\.gguf$/);
+  assert.notEqual(join(languageRoot, quantizePayload.filename), payload.models.items[0].id);
+  const refreshedPayload = await fetch(`http://127.0.0.1:${port}/api/system`).then((result) => result.json());
+  assert.equal(refreshedPayload.models.total, 3);
+  assert.equal(refreshedPayload.models.items.find((model) => model.filename === quantizePayload.filename).quantization.currentLevel, "Q3_K_M");
+
+  const invalidResponse = await fetch(`http://127.0.0.1:${port}/api/models/quantize`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ modelId: payload.models.items[0].id, level: "NOT_A_LEVEL" }),
+  });
+  assert.equal(invalidResponse.status, 400);
 });

@@ -125,6 +125,12 @@ const llamaCli = executable([
   "/usr/local/bin/llama-cli",
   "/usr/bin/llama-cli",
 ]);
+const llamaQuantize = executable([
+  process.env.LLAMA_QUANTIZE,
+  join(homedir(), "llama.cpp/build/bin/llama-quantize"),
+  "/usr/local/bin/llama-quantize",
+  "/usr/bin/llama-quantize",
+]);
 const compute = detectRocm() || detectNvidia() || detectGenericAccelerator() || { accelerator: null, backend: null };
 
 const config = {
@@ -137,10 +143,11 @@ const config = {
   models: {
     languageRoots: root ? [join(root, "huggingface"), join(root, "language")] : [],
     imageRoots: root ? [join(root, "diffusion")] : [],
+    languageOutputRoot: root ? join(root, "language") : null,
   },
   outputs: root ? { images: join(root, "diffusion/outputs/lab") } : null,
   services: {
-    language: llamaCli ? { engine: "llama.cpp", executable: llamaCli, serverExecutable: llamaServer } : null,
+    language: llamaCli ? { engine: "llama.cpp", executable: llamaCli, serverExecutable: llamaServer, quantizeExecutable: llamaQuantize } : null,
     image: imageCli ? { engine: "stable-diffusion.cpp", executable: imageCli, serverExecutable: imageServer } : null,
   },
 };
