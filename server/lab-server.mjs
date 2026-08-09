@@ -168,8 +168,15 @@ function runExecutable(executable, args, timeoutMs) {
   });
 }
 
-function cleanText(value) {
-  return value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/^>\s*/gm, "").trim();
+function cleanText(value, prompt) {
+  let text = value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/^>\s*/gm, "").trim();
+  const thinkingEnd = text.lastIndexOf("[End thinking]");
+  if (thinkingEnd >= 0) text = text.slice(thinkingEnd + "[End thinking]".length);
+  else if (text.includes("Loading model...")) {
+    const promptIndex = text.lastIndexOf(prompt);
+    if (promptIndex >= 0) text = text.slice(promptIndex + prompt.length);
+  }
+  return text.replace(/\[\s*Prompt:[\s\S]*$/i, "").replace(/^Exiting\.\.\.$/gm, "").trim();
 }
 
 function modelById(type, id) {
@@ -198,7 +205,7 @@ async function runChat(request, response) {
       "--simple-io",
       "--single-turn",
     ], 15 * 60_000);
-    const answer = cleanText(result.stdout);
+    const answer = cleanText(result.stdout, message);
     json(response, 200, { answer: answer || "The model returned an empty response" });
   } catch (error) {
     console.error(error);
