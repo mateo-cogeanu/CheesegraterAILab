@@ -204,6 +204,7 @@ async function runChat(request, response) {
       "--no-display-prompt",
       "--simple-io",
       "--single-turn",
+      "--reasoning", "off",
     ], 15 * 60_000);
     const answer = cleanText(result.stdout, message);
     json(response, 200, { answer: answer || "The model returned an empty response" });
