@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
@@ -32,6 +32,9 @@ test("serves machine configuration with live storage and model data", async (con
   await symlink("../../blobs/model-hash", join(cachedModel, "example-Q4_K_M.gguf"));
   await symlink("../../blobs/model-hash", join(cachedModel, "mmproj-example-bf16.gguf"));
   await writeFile(join(imageRoot, "test.safetensors"), "model");
+  const languageExecutable = join(directory, "test-language-runtime");
+  await writeFile(languageExecutable, "#!/bin/sh\nprintf '[Start thinking]\\nI should reply locally.\\n[End thinking]\\nhello locally\\n'\n");
+  await chmod(languageExecutable, 0o755);
 
   const configPath = join(directory, "config.json");
   await writeFile(configPath, JSON.stringify({
@@ -43,7 +46,7 @@ test("serves machine configuration with live storage and model data", async (con
     storage: { path: directory },
     models: { languageRoots: [languageRoot], imageRoots: [imageRoot] },
     outputs: { images: join(directory, "outputs") },
-    services: { language: { engine: "test", executable: "/bin/echo" }, image: null },
+    services: { language: { engine: "test", executable: languageExecutable }, image: null },
   }));
 
   const port = 32_000 + Math.floor(Math.random() * 2_000);
@@ -81,5 +84,7 @@ test("serves machine configuration with live storage and model data", async (con
     body: JSON.stringify({ modelId: payload.models.items[0].id, message: "hello locally" }),
   });
   assert.equal(chatResponse.status, 200);
-  assert.match((await chatResponse.json()).answer, /hello locally/);
+  const chatPayload = await chatResponse.json();
+  assert.equal(chatPayload.answer, "hello locally");
+  assert.equal(chatPayload.reasoning, "I should reply locally.");
 });

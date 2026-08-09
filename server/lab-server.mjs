@@ -168,15 +168,42 @@ function runExecutable(executable, args, timeoutMs) {
   });
 }
 
-function cleanText(value, prompt) {
+function cleanGeneratedText(value, prompt) {
   let text = value.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").replace(/^>\s*/gm, "").trim();
-  const thinkingEnd = text.lastIndexOf("[End thinking]");
-  if (thinkingEnd >= 0) text = text.slice(thinkingEnd + "[End thinking]".length);
-  else if (text.includes("Loading model...")) {
+  if (text.includes("Loading model...")) {
     const promptIndex = text.lastIndexOf(prompt);
     if (promptIndex >= 0) text = text.slice(promptIndex + prompt.length);
   }
   return text.replace(/\[\s*Prompt:[\s\S]*$/i, "").replace(/^Exiting\.\.\.$/gm, "").trim();
+}
+
+function parseChatOutput(value, prompt) {
+  const text = cleanGeneratedText(value, prompt);
+  const bracketed = text.match(/\[Start thinking\]\s*([\s\S]*?)\s*\[End thinking\]/i);
+  if (bracketed) {
+    return {
+      reasoning: bracketed[1].trim(),
+      answer: text.replace(bracketed[0], "").trim(),
+    };
+  }
+
+  const tagged = text.match(/<think>\s*([\s\S]*?)\s*<\/think>/i);
+  if (tagged) {
+    return {
+      reasoning: tagged[1].trim(),
+      answer: text.replace(tagged[0], "").trim(),
+    };
+  }
+
+  const thinkingEnd = text.lastIndexOf("[End thinking]");
+  if (thinkingEnd >= 0) {
+    return {
+      reasoning: text.slice(0, thinkingEnd).replace(/^\[Start thinking\]\s*/i, "").trim(),
+      answer: text.slice(thinkingEnd + "[End thinking]".length).trim(),
+    };
+  }
+
+  return { reasoning: "", answer: text };
 }
 
 function modelById(type, id) {
@@ -199,15 +226,18 @@ async function runChat(request, response) {
     const result = await runExecutable(executable, [
       "-m", model.id,
       "-p", message,
-      "-n", "384",
+      "-n", "1024",
       "-ngl", "999",
       "--no-display-prompt",
       "--simple-io",
       "--single-turn",
-      "--reasoning", "off",
+      "--reasoning", "on",
     ], 15 * 60_000);
-    const answer = cleanText(result.stdout, message);
-    json(response, 200, { answer: answer || "The model returned an empty response" });
+    const output = parseChatOutput(result.stdout, message);
+    json(response, 200, {
+      answer: output.answer || "The model returned an empty response",
+      ...(output.reasoning ? { reasoning: output.reasoning } : {}),
+    });
   } catch (error) {
     console.error(error);
     json(response, 500, { error: "Local language generation failed", detail: error.message });

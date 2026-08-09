@@ -45,6 +45,8 @@ test("contains production metadata and no starter preview", async () => {
   assert.match(page, /api\/chat/);
   assert.match(page, /api\/images/);
   assert.match(page, /Enter to send/);
+  assert.match(page, /Thought process/);
+  assert.match(page, /payload\.reasoning/);
   assert.match(page, /Generate image/);
   assert.doesNotMatch(page, /Generation becomes available after a compatible service is connected|Model: not connected|Copy name|connected providers/i);
   assert.match(styles, /prefers-reduced-motion/);
