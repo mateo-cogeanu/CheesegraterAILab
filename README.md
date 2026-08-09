@@ -13,8 +13,10 @@ The machine already provides the foundation for the lab:
 
 ## Project status
 
-The repository and its safe configuration conventions are initialized. The
-actual lab interface and workflow will be designed next.
+The first responsive web interface is built and deployable on the Cheesegrater.
+It provides understandable workspaces for system status, models, private chat,
+and image generation. Model execution and download actions will be connected
+to the backend in the next phase.
 
 ## Planned capabilities
 
@@ -31,6 +33,15 @@ actual lab interface and workflow will be designed next.
 config/   Version-controlled configuration examples
 docs/     Architecture notes and decisions
 scripts/  Installation, maintenance, and launch scripts
+web/      Responsive Cheesegrater AI Lab web interface
+```
+
+## Web interface
+
+The deployed lab is available on the local network at:
+
+```text
+http://192.168.111.100:8080/
 ```
 
 ## Security

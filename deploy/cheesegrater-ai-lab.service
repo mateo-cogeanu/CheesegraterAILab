@@ -1,0 +1,24 @@
+[Unit]
+Description=Cheesegrater AI Lab web interface
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cogiart
+Group=users
+WorkingDirectory=/home/cogiart/CheesegraterAILab/web
+Environment=NODE_ENV=production
+Environment=PORT=8080
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/local/bin/npm run start -- --hostname 0.0.0.0 --port 8080
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths=/home/cogiart/CheesegraterAILab/web/.wrangler
+
+[Install]
+WantedBy=multi-user.target

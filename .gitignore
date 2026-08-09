@@ -19,7 +19,11 @@ node_modules/
 
 # Builds and runtime data
 build/
+!web/build/
+!web/build/**
 dist/
+.next/
+.wrangler/
 logs/
 outputs/
 data/
