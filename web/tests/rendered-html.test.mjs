@@ -22,7 +22,7 @@ test("server-renders the Cheesegrater AI Lab interface", async () => {
   const html = await response.text();
   assert.match(html, /<title>Cheesegrater AI Lab<\/title>/i);
   assert.match(html, /Your AI lab, in one place\./);
-  assert.match(html, /Checking system connection/);
+  assert.match(html, /Reading local system/);
   assert.match(html, /Chat with a model/);
   assert.match(html, /Create an image/);
   assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape|MI50|ROCm|gfx906|192\.168/i);
@@ -36,11 +36,13 @@ test("contains production metadata and no starter preview", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /System discovery not connected/);
+  assert.match(page, /Local runtime unavailable/);
   assert.match(page, /mobile-nav/);
   assert.match(page, /Lab settings/);
-  assert.match(page, /localStorage/);
   assert.match(page, /api\/system/);
+  assert.match(page, /Use in Chat/);
+  assert.match(page, /Use in Studio/);
+  assert.doesNotMatch(page, /Generation becomes available after a compatible service is connected|Model: not connected|Copy name|connected providers/i);
   assert.match(styles, /prefers-reduced-motion/);
   assert.match(layout, /configurable interface/);
   assert.match(packageJson, /cheesegrater-ai-lab-web/);
