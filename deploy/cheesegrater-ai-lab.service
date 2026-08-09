@@ -5,7 +5,8 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-DynamicUser=yes
+User=__LAB_USER__
+DynamicUser=no
 WorkingDirectory=/opt/cheesegrater-ai-lab/web
 Environment=NODE_ENV=production
 Environment=PORT=8080
@@ -20,8 +21,8 @@ Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=strict
-ProtectHome=true
+ProtectSystem=full
+ProtectHome=read-only
 
 [Install]
 WantedBy=multi-user.target

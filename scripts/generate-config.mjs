@@ -109,9 +109,21 @@ const llamaServer = executable([
 ]);
 const imageServer = executable([
   process.env.DIFFUSION_SERVER,
-  join(homedir(), "stable-diffusion.cpp/build/bin/sd-server"),
   "/usr/local/libexec/stable-diffusion.cpp/sd-server",
   "/usr/local/bin/sd-server",
+  join(homedir(), "stable-diffusion.cpp/build/bin/sd-server"),
+]);
+const imageCli = executable([
+  process.env.DIFFUSION_CLI,
+  "/usr/local/libexec/stable-diffusion.cpp/sd-cli",
+  "/usr/local/bin/sd-cli",
+  join(homedir(), "stable-diffusion.cpp/build/bin/sd-cli"),
+]);
+const llamaCli = executable([
+  process.env.LLAMA_CLI,
+  join(homedir(), "llama.cpp/build/bin/llama-cli"),
+  "/usr/local/bin/llama-cli",
+  "/usr/bin/llama-cli",
 ]);
 const compute = detectRocm() || detectNvidia() || detectGenericAccelerator() || { accelerator: null, backend: null };
 
@@ -126,9 +138,10 @@ const config = {
     languageRoots: root ? [join(root, "huggingface"), join(root, "language")] : [],
     imageRoots: root ? [join(root, "diffusion")] : [],
   },
+  outputs: root ? { images: join(root, "diffusion/outputs/lab") } : null,
   services: {
-    language: llamaServer ? { engine: "llama.cpp", executable: llamaServer } : null,
-    image: imageServer ? { engine: "stable-diffusion.cpp", executable: imageServer } : null,
+    language: llamaCli ? { engine: "llama.cpp", executable: llamaCli, serverExecutable: llamaServer } : null,
+    image: imageCli ? { engine: "stable-diffusion.cpp", executable: imageCli, serverExecutable: imageServer } : null,
   },
 };
 

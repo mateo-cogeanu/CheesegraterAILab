@@ -6,6 +6,7 @@ repository=${CHEESEGRATER_AI_LAB_REPOSITORY:-https://github.com/mateo-cogeanu/Ch
 install_dir=${CHEESEGRATER_AI_LAB_INSTALL_DIR:-/opt/cheesegrater-ai-lab}
 service_port=${CHEESEGRATER_AI_LAB_PORT:-8080}
 ui_port=${CHEESEGRATER_AI_LAB_UI_PORT:-$((service_port + 1))}
+service_user=${CHEESEGRATER_AI_LAB_USER:-$(id -un)}
 
 if sudo test -d "$install_dir/.git"; then
   sudo git -C "$install_dir" pull --ff-only
@@ -24,7 +25,7 @@ sudo install -d -o root -g root -m 0755 /etc/cheesegrater-ai-lab
 sudo install -o root -g root -m 0644 "$config_tmp" /etc/cheesegrater-ai-lab/config.json
 
 service_tmp=$(mktemp)
-sed "s|WorkingDirectory=/opt/cheesegrater-ai-lab/web|WorkingDirectory=$install_dir/web|; s|Environment=PORT=8080|Environment=PORT=$service_port|; s|Environment=LAB_UI_PORT=8081|Environment=LAB_UI_PORT=$ui_port|; s|Environment=LAB_WEB_DIR=/opt/cheesegrater-ai-lab/web|Environment=LAB_WEB_DIR=$install_dir/web|; s|ExecStart=/usr/local/bin/node /opt/cheesegrater-ai-lab/server/lab-server.mjs|ExecStart=/usr/local/bin/node $install_dir/server/lab-server.mjs|" \
+sed "s|User=__LAB_USER__|User=$service_user|; s|WorkingDirectory=/opt/cheesegrater-ai-lab/web|WorkingDirectory=$install_dir/web|; s|Environment=PORT=8080|Environment=PORT=$service_port|; s|Environment=LAB_UI_PORT=8081|Environment=LAB_UI_PORT=$ui_port|; s|Environment=LAB_WEB_DIR=/opt/cheesegrater-ai-lab/web|Environment=LAB_WEB_DIR=$install_dir/web|; s|ExecStart=/usr/local/bin/node /opt/cheesegrater-ai-lab/server/lab-server.mjs|ExecStart=/usr/local/bin/node $install_dir/server/lab-server.mjs|" \
   "$install_dir/deploy/cheesegrater-ai-lab.service" >"$service_tmp"
 sudo install -o root -g root -m 0644 "$service_tmp" /etc/systemd/system/cheesegrater-ai-lab.service
 

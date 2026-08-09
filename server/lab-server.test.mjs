@@ -42,7 +42,8 @@ test("serves machine configuration with live storage and model data", async (con
     backend: { name: "Detected backend" },
     storage: { path: directory },
     models: { languageRoots: [languageRoot], imageRoots: [imageRoot] },
-    services: { language: null, image: null },
+    outputs: { images: join(directory, "outputs") },
+    services: { language: { engine: "test", executable: "/bin/echo" }, image: null },
   }));
 
   const port = 32_000 + Math.floor(Math.random() * 2_000);
@@ -73,4 +74,12 @@ test("serves machine configuration with live storage and model data", async (con
   assert.equal(payload.models.image, 1);
   assert.equal(payload.models.items.length, 2);
   assert.equal(payload.models.items[0].reference, "publisher/example-GGUF:Q4_K_M");
+
+  const chatResponse = await fetch(`http://127.0.0.1:${port}/api/chat`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ modelId: payload.models.items[0].id, message: "hello locally" }),
+  });
+  assert.equal(chatResponse.status, 200);
+  assert.match((await chatResponse.json()).answer, /hello locally/);
 });

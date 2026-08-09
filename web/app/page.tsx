@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Image from "next/image";
 
 type View = "overview" | "models" | "chat" | "images";
 type ConnectionState = "checking" | "connected" | "unconfigured" | "error";
@@ -78,14 +79,53 @@ function Models({ system, chooseModel }: { system: SystemSnapshot | null; choose
 
 function Chat({ models, selectedId, onSelect }: { models: ModelRecord[]; selectedId: string | null; onSelect: (id: string) => void }) {
   const [message, setMessage] = useState("");
+  const [turns, setTurns] = useState<{ role: "user" | "assistant"; text: string }[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const selected = models.find((model) => model.id === selectedId) || null;
-  return <section className="chat-shell"><aside className="chat-history"><button className="button button-primary wide" disabled>＋ New conversation</button><span className="card-kicker">Recent</span><div className="history-empty">No local conversations yet.</div></aside><div className="chat-main"><div className="chat-model"><div><span className={`pulse ${selected ? "" : "amber"}`} /><strong>{selected?.name || "Choose a language model"}</strong></div><select aria-label="Language model" value={selectedId || ""} onChange={(event) => onSelect(event.target.value)}><option value="" disabled>Choose model</option>{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></div><div className="chat-empty"><span className="chat-star">✦</span><h2>What are we thinking about?</h2><p>{selected ? `${selected.name} is selected from local model storage.` : "Choose one of the language models found on this machine."}</p></div><div className="composer"><textarea aria-label="Message" value={message} onChange={(event) => setMessage(event.target.value)} placeholder={selected ? `Message ${selected.name}…` : "Choose a language model above"} rows={2} disabled /><button aria-label="Send message" disabled>↑</button><small>Local chat controls are the next lab feature.</small></div></div></section>;
+  async function sendMessage() {
+    const text = message.trim();
+    if (!selected || !text || busy) return;
+    setMessage("");
+    setError("");
+    setTurns((current) => [...current, { role: "user", text }]);
+    setBusy(true);
+    try {
+      const response = await fetch("/api/chat", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ modelId: selected.id, message: text }) });
+      const payload = await response.json() as { answer?: string; error?: string; detail?: string };
+      if (!response.ok || !payload.answer) throw new Error(payload.detail || payload.error || "Local generation failed");
+      setTurns((current) => [...current, { role: "assistant", text: payload.answer! }]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Local generation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <section className="chat-shell"><aside className="chat-history"><button className="button button-primary wide" onClick={() => { setTurns([]); setError(""); }}>＋ New conversation</button><span className="card-kicker">Current session</span><div className="history-empty">{turns.length ? `${Math.ceil(turns.length / 2)} local exchange${turns.length > 2 ? "s" : ""}` : "No messages yet."}</div></aside><div className="chat-main"><div className="chat-model"><div><span className={`pulse ${selected ? "" : "amber"}`} /><strong>{selected?.name || "Choose a language model"}</strong></div><select aria-label="Language model" value={selectedId || ""} onChange={(event) => onSelect(event.target.value)} disabled={busy}><option value="" disabled>Choose model</option>{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></div>{turns.length ? <div className="chat-messages" aria-live="polite">{turns.map((turn, index) => <article className={`chat-bubble ${turn.role}`} key={`${turn.role}-${index}`}><span>{turn.role === "user" ? "You" : selected?.name || "Model"}</span><p>{turn.text}</p></article>)}{busy && <div className="thinking"><span className="pulse" /> Running locally on the accelerator…</div>}</div> : <div className="chat-empty"><span className="chat-star">✦</span><h2>What are we thinking about?</h2><p>{selected ? `${selected.name} is ready on this machine.` : "Choose one of the language models found on this machine."}</p></div>}<div className="composer"><textarea aria-label="Message" value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void sendMessage(); } }} placeholder={selected ? `Message ${selected.name}…` : "Choose a language model above"} rows={2} disabled={!selected || busy} /><button aria-label="Send message" onClick={() => void sendMessage()} disabled={!selected || !message.trim() || busy}>{busy ? "…" : "↑"}</button>{error ? <small className="runtime-error">{error}</small> : <small>Enter to send · Shift+Enter for a new line</small>}</div></div></section>;
 }
 
 function Images({ models, selectedId, onSelect }: { models: ModelRecord[]; selectedId: string | null; onSelect: (id: string) => void }) {
   const [prompt, setPrompt] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const selected = models.find((model) => model.id === selectedId) || null;
-  return <section className="studio-grid"><article className="panel controls-panel"><span className="card-kicker">Generation setup</span><h2>Describe your image</h2><label className="field-label" htmlFor="image-prompt">Prompt</label><textarea id="image-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic photograph of…" rows={6} /><div className="control-pair"><label className="control-field"><span>Model</span><select value={selectedId || ""} onChange={(event) => onSelect(event.target.value)}><option value="" disabled>Choose model</option>{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label><div className="control-field"><span>Size</span><button className="select-button" disabled>Model default</button></div></div><button className="button button-primary wide" disabled>Generate image <span>✦</span></button><p className="field-note">{selected ? `${selected.name} is selected from local model storage.` : "Choose one of the image models found on this machine."}</p></article><article className="canvas-panel"><div className="canvas-empty"><div className="canvas-glyph">◇</div><h2>Your canvas is ready.</h2><p>Images will be generated here using this machine&apos;s accelerator.</p><span>Local generation</span></div></article></section>;
+  async function generateImage() {
+    if (!selected || !prompt.trim() || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const response = await fetch("/api/images", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ modelId: selected.id, prompt: prompt.trim() }) });
+      const payload = await response.json() as { imageUrl?: string; error?: string; detail?: string };
+      if (!response.ok || !payload.imageUrl) throw new Error(payload.detail || payload.error || "Local image generation failed");
+      setImageUrl(`${payload.imageUrl}?v=${Date.now()}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Local image generation failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return <section className="studio-grid"><article className="panel controls-panel"><span className="card-kicker">Generation setup</span><h2>Describe your image</h2><label className="field-label" htmlFor="image-prompt">Prompt</label><textarea id="image-prompt" value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="A cinematic photograph of…" rows={6} disabled={busy} /><div className="control-pair"><label className="control-field"><span>Model</span><select value={selectedId || ""} onChange={(event) => onSelect(event.target.value)} disabled={busy}><option value="" disabled>Choose model</option>{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</select></label><div className="control-field"><span>Size</span><button className="select-button" disabled>512 × 512</button></div></div><button className="button button-primary wide" onClick={() => void generateImage()} disabled={!selected || !prompt.trim() || busy}>{busy ? "Generating locally…" : "Generate image"} <span>✦</span></button><p className={`field-note ${error ? "runtime-error" : ""}`}>{error || (selected ? `${selected.name} will run on this machine.` : "Choose one of the image models found on this machine.")}</p></article><article className="canvas-panel">{imageUrl ? <div className="generated-canvas"><Image src={imageUrl} alt={prompt || "Locally generated image"} width={512} height={512} unoptimized /><span>Generated locally</span></div> : <div className="canvas-empty"><div className="canvas-glyph">◇</div><h2>{busy ? "Generating on the accelerator…" : "Your canvas is ready."}</h2><p>{busy ? "The first run can take a little longer while the model loads." : "Images will be generated here using this machine&apos;s accelerator."}</p><span>Local generation</span></div>}</article></section>;
 }
 
 function SettingsDialog({ state, onClose, onRefresh }: { state: ConnectionState; onClose: () => void; onRefresh: () => void }) {

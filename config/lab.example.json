@@ -12,6 +12,9 @@
     "languageRoots": [],
     "imageRoots": []
   },
+  "outputs": {
+    "images": "/path/to/models/diffusion/outputs/lab"
+  },
   "services": {
     "language": null,
     "image": null
