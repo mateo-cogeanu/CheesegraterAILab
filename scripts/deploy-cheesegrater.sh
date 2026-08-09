@@ -18,5 +18,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now cheesegrater-ai-lab.service
 sudo systemctl restart cheesegrater-ai-lab.service
 
-curl --fail --retry 10 --retry-delay 1 http://127.0.0.1:8080/ >/dev/null
+curl --fail --retry 15 --retry-delay 1 --retry-connrefused \
+  http://127.0.0.1:8080/ >/dev/null
 printf '%s\n' 'Cheesegrater AI Lab is available at http://192.168.111.100:8080/'
