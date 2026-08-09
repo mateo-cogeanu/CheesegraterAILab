@@ -1,0 +1,9 @@
+# This schema is provisional until the lab interface is designed.
+models:
+  language: []
+  diffusion: []
+
+storage:
+  root: /mnt/raid0/models
+  huggingface_cache: /mnt/raid0/models/huggingface
+  diffusion: /mnt/raid0/models/diffusion
