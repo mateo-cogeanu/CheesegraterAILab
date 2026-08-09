@@ -9,10 +9,13 @@ DynamicUser=yes
 WorkingDirectory=/opt/cheesegrater-ai-lab/web
 Environment=NODE_ENV=production
 Environment=PORT=8080
+Environment=LAB_UI_PORT=8081
+Environment=LAB_CONFIG=/etc/cheesegrater-ai-lab/config.json
+Environment=LAB_WEB_DIR=/opt/cheesegrater-ai-lab/web
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 Environment=WRANGLER_LOG_PATH=/tmp/cheesegrater-ai-lab-wrangler.log
 Environment=WRANGLER_WRITE_LOGS=false
-ExecStart=/usr/local/bin/npm run start -- --hostname 0.0.0.0 --port ${PORT}
+ExecStart=/usr/local/bin/node /opt/cheesegrater-ai-lab/server/lab-server.mjs
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

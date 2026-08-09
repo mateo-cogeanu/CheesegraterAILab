@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+config/lab.json
 *.pem
 *.key
 

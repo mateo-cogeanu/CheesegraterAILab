@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "machine": {
+    "name": "AI workstation"
+  },
+  "accelerator": null,
+  "backend": null,
+  "storage": {
+    "path": "/path/to/models"
+  },
+  "models": {
+    "languageRoots": [],
+    "imageRoots": []
+  },
+  "services": {
+    "language": null,
+    "image": null
+  }
+}
