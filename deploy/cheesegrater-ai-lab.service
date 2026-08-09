@@ -5,20 +5,20 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=cogiart
-Group=users
-WorkingDirectory=/home/cogiart/CheesegraterAILab/web
+DynamicUser=yes
+WorkingDirectory=/opt/cheesegrater-ai-lab/web
 Environment=NODE_ENV=production
 Environment=PORT=8080
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
-ExecStart=/usr/local/bin/npm run start -- --hostname 0.0.0.0 --port 8080
+Environment=WRANGLER_LOG_PATH=/tmp/cheesegrater-ai-lab-wrangler.log
+Environment=WRANGLER_WRITE_LOGS=false
+ExecStart=/usr/local/bin/npm run start -- --hostname 0.0.0.0 --port ${PORT}
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
-ProtectSystem=full
-ProtectHome=read-only
-ReadWritePaths=/home/cogiart/CheesegraterAILab/web/.wrangler
+ProtectSystem=strict
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target

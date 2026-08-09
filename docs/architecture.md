@@ -1,27 +1,29 @@
 # Architecture
 
-## Current foundation
+## Runtime discovery
 
-The Cheesegrater Mac Pro is the compute host. ROCm exposes the MI50 as a
-`gfx906` device, while model files live on the RAID0 volume rather than the
-system disk.
+Cheesegrater AI Lab treats the deployment host as unknown. A connected lab API
+reports machine identity, available accelerators, inference backends, storage,
+models, and job activity at runtime.
 
-The lab application will orchestrate the existing command-line inference
-engines instead of duplicating them:
-
-- `llama` for language models
-- `diffusion` for image models
+The browser must never infer hardware or storage from the page location. When
+discovery is unavailable, the interface presents an explicit unconfigured
+state.
 
 ## Design constraints
 
-- Large artifacts stay under `/mnt/raid0/models` and outside Git.
+- No username, hostname, IP address, accelerator, backend, model, capacity, or
+  filesystem path is compiled into the product interface.
+- Large artifacts stay outside Git in administrator-configured storage.
 - Secrets are supplied through environment variables or an ignored `.env`.
 - Destructive model operations require explicit confirmation.
-- The interface must report whether work is running on ROCm or falling back to
-  the CPU.
-- Long downloads should be resumable and expose progress.
+- Long downloads must be resumable and expose progress.
+- Browser settings remain browser-local until a backend configuration system
+  is designed.
 
-## Next decision
+## Discovery contract
 
-Define the first lab experience: web interface, terminal application, desktop
-interface, API, or a combination of these.
+The interface expects `GET /api/system` from the configured endpoint. The
+future response may contain machine, accelerator, backend, storage, and model
+summary objects. Every field is optional and must be rendered as unknown when
+absent.

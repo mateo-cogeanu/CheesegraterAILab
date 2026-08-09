@@ -21,11 +21,11 @@ test("server-renders the Cheesegrater AI Lab interface", async () => {
 
   const html = await response.text();
   assert.match(html, /<title>Cheesegrater AI Lab<\/title>/i);
-  assert.match(html, /Your local AI, in one place\./);
-  assert.match(html, /Cheesegrater online/);
+  assert.match(html, /Your AI lab, in one place\./);
+  assert.match(html, /Checking system connection/);
   assert.match(html, /Chat with a model/);
   assert.match(html, /Create an image/);
-  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape/i);
+  assert.doesNotMatch(html, /codex-preview|react-loading-skeleton|Your site is taking shape|MI50|ROCm|gfx906|192\.168/i);
 });
 
 test("contains production metadata and no starter preview", async () => {
@@ -36,14 +36,16 @@ test("contains production metadata and no starter preview", async () => {
     readFile(new URL("../package.json", import.meta.url), "utf8"),
   ]);
 
-  assert.match(page, /Cheesegrater online/);
+  assert.match(page, /System discovery not connected/);
   assert.match(page, /mobile-nav/);
+  assert.match(page, /Lab settings/);
+  assert.match(page, /localStorage/);
+  assert.match(page, /api\/system/);
   assert.match(styles, /prefers-reduced-motion/);
-  assert.match(layout, /generateMetadata/);
-  assert.match(layout, /og\.png/);
+  assert.match(layout, /configurable interface/);
   assert.match(packageJson, /cheesegrater-ai-lab-web/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
 
   await assert.rejects(access(new URL("../app/_sites-preview", import.meta.url)));
-  await access(new URL("../public/og.png", import.meta.url));
+  await assert.rejects(access(new URL("../public/og.png", import.meta.url)));
 });

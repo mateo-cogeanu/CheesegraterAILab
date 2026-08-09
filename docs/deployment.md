@@ -1,24 +1,20 @@
-# Cheesegrater deployment
+# Deployment
 
-The web interface runs as a systemd service on the Cheesegrater and listens on
-port `8080` across the local network.
+The web interface runs as a systemd service and listens on a configurable port.
+The tracked service uses a dynamic system identity; no login username is
+compiled into the deployment.
 
-## Runtime
+## Defaults
 
-- Node.js 24 LTS
-- application checkout: `/home/cogiart/CheesegraterAILab`
+- application checkout: `/opt/cheesegrater-ai-lab`
 - service: `cheesegrater-ai-lab.service`
-- local URL: `http://192.168.111.100:8080/`
+- port: `8080`
+
+Each default can be overridden with the environment variables documented in
+`.env.example`. The reachable URL depends on the deployment host and network.
 
 ## Update
 
-Run the deployment script on the Cheesegrater after changes are merged into
-the checked-out branch:
-
-```bash
-cd /home/cogiart/CheesegraterAILab
-./scripts/deploy-cheesegrater.sh
-```
-
-The script performs a fast-forward pull, installs locked dependencies, creates
-a production build, restarts the service, and checks the local endpoint.
+Run `scripts/deploy-cheesegrater.sh` from any checkout. It updates or creates
+the installation checkout, installs locked dependencies, builds the app,
+restarts the persistent service, and checks its loopback endpoint.
