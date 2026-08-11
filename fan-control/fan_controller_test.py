@@ -61,7 +61,7 @@ class FanControllerTests(unittest.TestCase):
         try:
             port.open()
             port.require_pong()
-            port.set_fan(73)
+            self.assertTrue(port.set_fan(73))
             worker.join(timeout=2)
         finally:
             port.close()

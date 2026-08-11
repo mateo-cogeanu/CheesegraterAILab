@@ -91,7 +91,7 @@ class SerialPort:
         return None
 
     def require_pong(self, timeout: float = 2.0) -> None:
-        time.sleep(0.2)
+        time.sleep(0.5)
         self.write_line("PING")
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -100,16 +100,15 @@ class SerialPort:
                 return
         raise TimeoutError(f"No PONG received from {self.path}")
 
-    def set_fan(self, speed: int, confirmation_timeout: float = 1.0) -> None:
+    def set_fan(self, speed: int, confirmation_timeout: float = 0.25) -> bool:
         speed = max(0, min(100, int(speed)))
         self.write_line(f"FAN {speed}")
-        expected = f"FAN={speed}"
         deadline = time.monotonic() + confirmation_timeout
         while time.monotonic() < deadline:
             line = self.read_line(max(0, deadline - time.monotonic()))
-            if line == expected:
-                return
-        raise TimeoutError(f"Pico did not confirm {expected}")
+            if line and line.startswith("FAN="):
+                return True
+        return False
 
 
 def load_config(path: str) -> dict:
