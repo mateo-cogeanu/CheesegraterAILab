@@ -37,7 +37,7 @@ sudo install -d -m 0755 /usr/local/libexec /etc/cheesegrater-fan-control
 sudo install -m 0755 "$controller" /usr/local/libexec/cheesegrater-fan-control
 
 config_file=$(mktemp)
-unit_file=$(mktemp)
+unit_file=$(mktemp /tmp/cheesegrater-fan-control.XXXXXX.service)
 trap 'rm -f "$config_file" "$unit_file"' EXIT
 sed "s/@DEPLOY_USER@/$deploy_user/g" "$unit" > "$unit_file"
 sudo systemd-analyze verify "$unit_file"
