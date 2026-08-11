@@ -1,0 +1,22 @@
+[Unit]
+Description=Cheesegrater accelerator fan controller
+After=local-fs.target
+
+[Service]
+Type=simple
+User=@DEPLOY_USER@
+SupplementaryGroups=dialout
+ExecStart=/usr/local/libexec/cheesegrater-fan-control --config /etc/cheesegrater-fan-control/config.json
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target
